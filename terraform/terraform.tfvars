@@ -1,0 +1,13 @@
+vpc_id        = "vpc-0294556f73834f2b1"
+subnet_id     = "subnet-08b4a172ac500a5dc"
+instance_name = "vincent-test2-notebook"
+aws_profile   = "saml"
+aws_region    = "eu-west-1"
+instance_type = "ml.t3.large"
+idle_timeout  = 5400
+start_hour    = 8
+start_minute  = 0
+end_hour      = 19
+end_minute    = 30
+timezone      = "Europe/Paris"
+cpu_threshold = 5

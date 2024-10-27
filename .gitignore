@@ -1,0 +1,11 @@
+.venv
+.mypy_cache
+.aider*
+.env
+.ruff_cache
+.terraform
+*.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfstate.backup.*
+*.tfstate.lock.info
