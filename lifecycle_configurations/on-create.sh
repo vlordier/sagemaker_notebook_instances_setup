@@ -15,6 +15,18 @@ echo "Running on-create script..."
 # Define a base directory
 BASE_DIR="/home/ec2-user/SageMaker/my-sagemaker-setup"
 
+# Ensure the base directory exists and has the correct permissions
+# This is important because the SageMaker notebook instance is ephemeral
+# and the lifecycle configuration scripts run as the root user.
+
+# Create the base directory if it does not exist
+if [ ! -d "$BASE_DIR" ]; then
+	mkdir -p "$BASE_DIR"
+fi
+
+# Set the correct permissions for the base directory
+chmod 755 "$BASE_DIR"
+
 # Create necessary directories with proper permissions
 mkdir -p "$BASE_DIR/autostop" "$BASE_DIR/code-server"
 chmod 755 "$BASE_DIR" "$BASE_DIR/autostop" "$BASE_DIR/code-server"

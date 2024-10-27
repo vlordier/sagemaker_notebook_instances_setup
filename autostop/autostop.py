@@ -325,7 +325,7 @@ def get_last_activity_time(args) -> datetime:
         response = requests.get(
             f"https://127.0.0.1:{args.port}/api/sessions",
             timeout=10,
-            verify=False  # Already disabled warnings globally
+            verify=True
         )
         response.raise_for_status()
         data = json.loads(response.content.decode("utf-8"))
@@ -423,12 +423,26 @@ def main():
     args = parse_arguments()
     logging.info("Starting autostop with arguments: %s", vars(args))
 
-    # Validate AWS profile early and find SageMaker roles
     if not validate_aws_profile(args.profile):
         logging.error("Failed to validate AWS profile. Exiting.")
         sys.exit(1)
 
-    # Find and display available SageMaker roles
+    display_sagemaker_roles(args)
+    args.name = args.name or generate_instance_name()
+    print(f"Generated instance name: {args.name}")
+
+    if is_within_active_hours(args):
+        print("Notebook is within active hours. Skipping shutdown.")
+        sys.exit(0)
+
+    if args.cpu_threshold is not None and not is_cpu_idle(args.cpu_threshold, args.cpu_check_duration):
+        print(f"CPU usage is above threshold ({args.cpu_threshold}%). Notebook is active.")
+        sys.exit(0)
+
+    check_idle_time(args)
+
+
+def display_sagemaker_roles(args):
     sagemaker_roles = find_sagemaker_roles(args.profile)
     if sagemaker_roles:
         logging.info("Found SageMaker roles:")
@@ -437,44 +451,14 @@ def main():
     else:
         logging.warning("No SageMaker roles found in account")
 
-    # Generate instance name if not provided
-    if not args.name:
-        args.name = generate_instance_name()
-        print(f"Generated instance name: {args.name}")
 
-    # Check if within active hours
-    if is_within_active_hours(args):
-        print("Notebook is within active hours. Skipping shutdown.")
-        sys.exit(0)
-    else:
-        print("Notebook is outside active hours. Proceeding with idle check.")
-
-    # Check CPU usage if CPU threshold is set
-    if args.cpu_threshold is not None:
-        if is_cpu_idle(args.cpu_threshold, args.cpu_check_duration):
-            print(f"CPU usage is below threshold ({args.cpu_threshold}%).")
-        else:
-            print(
-                f"CPU usage is above threshold ({args.cpu_threshold}%). "
-                "Notebook is active."
-            )
-            sys.exit(0)
-    else:
-        print("No CPU threshold set. Skipping CPU usage check.")
-
+def check_idle_time(args):
     last_activity = get_last_activity_time(args)
-    if not last_activity:
-        print("No activity detected. Considering as idle.")
-        idle_time = args.time + 1  # Ensure it's greater than the threshold
-    else:
-        idle_time = (datetime.utcnow() - last_activity).total_seconds()
-        print(f"Last activity was {idle_time} seconds ago.")
+    idle_time = (datetime.utcnow() - last_activity).total_seconds() if last_activity else args.time + 1
+    print(f"Last activity was {idle_time} seconds ago.")
 
     if idle_time > args.time:
-        print(
-            f"Notebook has been idle for {idle_time} seconds, exceeding the "
-            f"threshold of {args.time} seconds."
-        )
+        print(f"Notebook has been idle for {idle_time} seconds, exceeding the threshold of {args.time} seconds.")
         if args.ignore_connections or not are_connections_active(args):
             notebook_instance_name = get_notebook_name()
             stop_notebook_instance(notebook_instance_name, args.region, args.profile)

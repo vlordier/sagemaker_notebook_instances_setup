@@ -6,44 +6,47 @@ IFS=$'\n\t'
 
 # Ensure script has proper permissions
 if [ ! -x "$0" ]; then
-    echo "❌ Error: Script must be executable"
-    chmod +x "$0" || { echo "Failed to set executable permission"; exit 1; }
+	echo "❌ Error: Script must be executable"
+	chmod +x "$0" || {
+		echo "Failed to set executable permission"
+		exit 1
+	}
 fi
 
 # Verify permissions of critical files
 check_file_permissions() {
-    local file=$1
-    local expected_perms=$2
+	local file=$1
+	local expected_perms=$2
 
-    if [ ! -f "$file" ]; then
-        echo "❌ Error: File not found: $file"
-        return 1
-    }
+	if [ ! -f "$file" ]; then
+		echo "❌ Error: File not found: $file"
+		return 1
+	fi
 
-    local actual_perms
-    actual_perms=$(stat -f "%Lp" "$file")
+	local actual_perms
+	actual_perms=$(stat -f "%Lp" "$file")
 
-    if [ "$actual_perms" != "$expected_perms" ]; then
-        echo "⚠️ Warning: Incorrect permissions on $file: $actual_perms (expected $expected_perms)"
-        chmod "$expected_perms" "$file" || {
-            echo "❌ Error: Failed to set permissions on $file"
-            return 1
-        }
-    fi
-    return 0
+	if [ "$actual_perms" != "$expected_perms" ]; then
+		echo "⚠️ Warning: Incorrect permissions on $file: $actual_perms (expected $expected_perms)"
+		chmod "$expected_perms" "$file" || {
+			echo "❌ Error: Failed to set permissions on $file"
+			return 1
+		}
+	fi
+	return 0
 }
 
 # Check permissions of critical files
 critical_files=(
-    "/usr/local/bin/autostop.py:755"
-    "/home/ec2-user/.config/code-server/config.yaml:600"
-    "/opt/ml/certificates/mykey.key:600"
-    "/opt/ml/certificates/mycert.crt:644"
+	"/usr/local/bin/autostop.py:755"
+	"/home/ec2-user/.config/code-server/config.yaml:600"
+	"/opt/ml/certificates/mykey.key:600"
+	"/opt/ml/certificates/mycert.crt:644"
 )
 
 for file_entry in "${critical_files[@]}"; do
-    IFS=':' read -r file perms <<< "$file_entry"
-    check_file_permissions "$file" "$perms" || echo "⚠️ Warning: Permission check failed for $file"
+	IFS=':' read -r file perms <<<"$file_entry"
+	check_file_permissions "$file" "$perms" || echo "⚠️ Warning: Permission check failed for $file"
 done
 
 # Configure logging
