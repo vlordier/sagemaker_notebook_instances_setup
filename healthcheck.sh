@@ -1,4 +1,5 @@
 #!/bin/bash
+#!/bin/bash
 
 # Health check script to monitor critical services
 set -euo pipefail

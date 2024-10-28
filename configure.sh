@@ -26,6 +26,7 @@ get_value() {
 }
 
 # Load default configuration
+# shellcheck disable=SC1091
 source config/defaults.env
 
 # Use values passed from setup.sh or fall back to defaults
@@ -114,7 +115,31 @@ START_MINUTE=${START_MINUTE}
 END_HOUR=${END_HOUR}
 END_MINUTE=${END_MINUTE}
 CPU_THRESHOLD=${CPU_THRESHOLD}
+CPU_CHECK_DURATION=${CPU_CHECK_DURATION:-60}
+ACTIVE_DAYS="${ACTIVE_DAYS:-1 2 3 4 5}"
+IGNORE_CONNECTIONS=${IGNORE_CONNECTIONS:-false}
+LOG_LEVEL="${LOG_LEVEL:-INFO}"
+LOG_FILE="${LOG_FILE:-/var/log/autostop.log}"
 CRON_FREQUENCY="${CRON_FREQUENCY}"
+EOF
+
+# Also update autostop config
+cat >autostop/autostop_config.env <<EOF
+# This file is auto-generated from config/defaults.env
+# Do not edit directly
+AWS_REGION=${AWS_REGION}
+TIMEZONE=${TIMEZONE}
+START_HOUR=${START_HOUR}
+START_MINUTE=${START_MINUTE}
+END_HOUR=${END_HOUR}
+END_MINUTE=${END_MINUTE}
+IDLE_TIME=${IDLE_TIME}
+CPU_THRESHOLD=${CPU_THRESHOLD}
+CPU_CHECK_DURATION=${CPU_CHECK_DURATION:-60}
+ACTIVE_DAYS="${ACTIVE_DAYS:-1 2 3 4 5}"
+IGNORE_CONNECTIONS=${IGNORE_CONNECTIONS:-false}
+LOG_LEVEL="${LOG_LEVEL:-INFO}"
+LOG_FILE="${LOG_FILE:-/var/log/autostop.log}"
 EOF
 
 # Write configuration to terraform.tfvars

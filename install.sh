@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
 
 # code-server's automatic install script.
@@ -501,14 +501,25 @@ distro() {
 
 	if [ -f /etc/os-release ]; then
 		(
-			# shellcheck source=/etc/os-release
-			# shellcheck source=/etc/os-release
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
 			# shellcheck source=/dev/null
 			# shellcheck source=/dev/null
-			# shellcheck source=/etc/os-release
-			# shellcheck source=/etc/os-release
-			# shellcheck source=/dev/null
-			# shellcheck source=/dev/null
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
+			# shellcheck disable=SC1091
 			. /etc/os-release
 			if [ "${ID_LIKE-}" ]; then
 				for id_like in $ID_LIKE; do
@@ -535,6 +546,7 @@ distro_name() {
 
 	if [ -f /etc/os-release ]; then
 		(
+			# shellcheck source=/dev/null
 			. /etc/os-release
 			echo "$PRETTY_NAME"
 		)

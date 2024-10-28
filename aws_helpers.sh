@@ -19,6 +19,11 @@ validate_aws_credentials() {
 		echo "❌ AWS credentials validation failed. Please check your credentials."
 		return 1
 	fi
+
+	# Display the identity being used
+	aws sts get-caller-identity --no-cli-pager --profile "$profile" --region "$region" \
+		--query 'Arn' --output text || true
+
 	echo "✅ AWS credentials validated"
 	return 0
 }
@@ -30,7 +35,9 @@ get_vpcs() {
 
 	echo "📡 Querying AWS EC2 API for VPCs..."
 
+	# shellcheck disable=SC2016
 	local result
+	# shellcheck disable=SC2016
 	if ! result=$(aws ec2 describe-vpcs \
 		--no-cli-pager \
 		--no-paginate \
@@ -64,7 +71,9 @@ get_subnets() {
 	local vpc_id="$3"
 
 	# Get only public subnets (those with a route to internet gateway)
+	# shellcheck disable=SC2016
 	local result
+	# shellcheck disable=SC2016
 	if ! result=$(aws ec2 describe-route-tables \
 		--no-cli-pager \
 		--no-paginate \
@@ -84,6 +93,7 @@ get_subnets() {
 	fi
 
 	# Get subnet details for public subnets only
+	# shellcheck disable=SC2016
 	aws ec2 describe-subnets \
 		--no-cli-pager \
 		--no-paginate \

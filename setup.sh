@@ -10,6 +10,7 @@
 # - AWS CLI installed and configured with appropriate credentials.
 # - Terraform installed.
 # - The 'config/defaults.env' file with default configuration values.
+# - The 'configure.sh' and 'install.sh' scripts are now merged into this script.
 #
 # Usage:
 # Run this script from the project root directory:
@@ -48,13 +49,13 @@ if [ "$DEBUG" = "true" ]; then
 fi
 
 # Configure logging
-LOG_FILE=${LOG_FILE:-}
+LOG_FILE=${LOG_FILE:-./autostop.log}
 
 log() {
 	local message="$1"
 	echo -e "$message" >&2 # Output to stderr instead of stdout
 	if [ -n "$LOG_FILE" ]; then
-		echo -e "$(date '+%Y-%m-%d %H:%M:%S') $message" >>"$LOG_FILE"
+		echo -e "$(date '+%Y-%m-%d %H:%M:%S') $message" >>"./autostop.log"
 	fi
 }
 
@@ -84,7 +85,7 @@ validate_aws_profile() {
 	log "🔍 Validating AWS profile..."
 	if ! aws configure list-profiles | grep -qw "$profile"; then
 		log "❌ AWS profile '$profile' does not exist."
-		return 1
+		exit 1
 	fi
 	return 0
 }
@@ -139,6 +140,19 @@ validate_idle_time() {
 	return 0
 }
 
+validate_nickname() {
+	local nickname=$1
+	if [[ ! $nickname =~ ^[a-zA-Z0-9-]+$ ]]; then
+		log "❌ Nickname must contain only letters, numbers, and hyphens"
+		return 1
+	fi
+	if [ ${#nickname} -gt 20 ]; then
+		log "❌ Nickname must be 20 characters or less"
+		return 1
+	fi
+	return 0
+}
+
 get_valid_input() {
 	local prompt=$1
 	local default=$2
@@ -155,20 +169,6 @@ get_valid_input() {
 		fi
 		log "Please try again."
 	done
-}
-
-# Add nickname validation function
-validate_nickname() {
-	local nickname=$1
-	if [[ ! $nickname =~ ^[a-zA-Z0-9-]+$ ]]; then
-		log "❌ Nickname must contain only letters, numbers, and hyphens"
-		return 1
-	fi
-	if [ ${#nickname} -gt 20 ]; then
-		log "❌ Nickname must be 20 characters or less"
-		return 1
-	fi
-	return 0
 }
 
 # Get user nickname
@@ -294,18 +294,82 @@ done
 log "✅ All script permissions verified"
 
 # Add nickname validation function
-validate_nickname() {
-	local nickname=$1
-	if [[ ! $nickname =~ ^[a-zA-Z0-9-]+$ ]]; then
-		log "❌ Nickname must contain only letters, numbers, and hyphens"
-		return 1
-	fi
-	if [ ${#nickname} -gt 20 ]; then
-		log "❌ Nickname must be 20 characters or less"
-		return 1
-	fi
-	return 0
+
+# Save configuration
+if [ ! -d "autostop" ]; then
+	log "❌ Error: 'autostop' directory not found."
+	exit 1
+fi
+
+cat >autostop/autostop_config.env <<EOF
+AWS_REGION=$USER_AWS_REGION
+TIMEZONE=$USER_TIMEZONE
+START_HOUR=$USER_START_HOUR
+START_MINUTE=$USER_START_MINUTE
+END_HOUR=$USER_END_HOUR
+END_MINUTE=$USER_END_MINUTE
+IDLE_TIME=$USER_IDLE_TIME
+EOF
+
+log "🚀 Starting SageMaker Setup..."
+
+# Set instance name based on nickname
+INSTANCE_NAME="${USER_NICKNAME}-notebook"
+
+# Start log streaming in background
+aws logs tail "/aws/sagemaker/NotebookInstances/$INSTANCE_NAME" --follow &
+LOGGER_PID=$!
+
+# Trap to kill logger on script exit
+trap 'kill $LOGGER_PID 2>/dev/null' EXIT
+
+# Check prerequisites
+command -v terraform >/dev/null 2>&1 || {
+	log "❌ Error: Terraform is required but not installed. Aborting."
+	exit 1
 }
+command -v aws >/dev/null 2>&1 || {
+	log "❌ Error: AWS CLI is required but not installed. Aborting."
+	exit 1
+}
+
+# Check and set executable permissions for required scripts
+check_script_permissions() {
+	local script=$1
+	if [ ! -f "$script" ]; then
+		log "❌ Error: Required script not found: $script"
+		exit 1
+	fi
+
+	if [ ! -x "$script" ]; then
+		log "📝 Setting executable permission for $script"
+		if ! chmod +x "$script"; then
+			log "❌ Error: Failed to set executable permission for $script"
+			exit 1
+		fi
+	fi
+}
+
+log "🔧 Checking script permissions..."
+REQUIRED_SCRIPTS=(
+	"autostop/auto_stop.sh"
+	"autostop/setup_venv.sh"
+	"code-server/on-create.sh"
+	"code-server/on-start.sh"
+	"configure.sh"
+	"healthcheck.sh"
+	"install.sh"
+	"lifecycle_configurations/on-create.sh"
+	"lifecycle_configurations/on-start.sh"
+	"terraform/tf_apply.sh"
+	"aws_helpers.sh"
+)
+
+for script in "${REQUIRED_SCRIPTS[@]}"; do
+	check_script_permissions "$script"
+done
+
+log "✅ All script permissions verified"
 
 # Export collected values for configure.sh
 export USER_NICKNAME="$USER_NICKNAME"
@@ -340,6 +404,7 @@ get_and_validate_role_arn() {
 	# List available SageMaker roles
 	log "🔍 Searching for existing SageMaker roles..."
 	local roles
+	# shellcheck disable=SC2016
 	roles=$(aws iam list-roles --profile "$USER_AWS_PROFILE" --query 'Roles[?contains(RoleName, `SageMaker`) == `true`].Arn' --output text)
 
 	if [ -n "$roles" ]; then

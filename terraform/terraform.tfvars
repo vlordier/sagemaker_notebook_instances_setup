@@ -1,6 +1,6 @@
 vpc_id        = "vpc-0294556f73834f2b1"
 subnet_id     = "subnet-08b4a172ac500a5dc"
-instance_name = "vincent-test2-notebook"
+instance_name = "default-notebook"
 aws_profile   = "saml"
 aws_region    = "eu-west-1"
 instance_type = "ml.t3.large"

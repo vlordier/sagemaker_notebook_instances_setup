@@ -11,11 +11,15 @@ notebook instance with autostop functionality and code-server integration.
 - Git (for version control)
 - Basic understanding of AWS SageMaker and Terraform
 
+Text before list.
+
+- List item 1
+
 ## Detailed Setup Instructions
 
 ### 1. AWS Credentials Setup
 
-```bash
+```hcl
 aws configure
 ```
 
@@ -35,14 +39,14 @@ Required permissions:
 
 2. Create a `terraform.tfvars` file:
    ```hcl
-   aws_region     = "eu-west-1"
-   instance_type  = "ml.t3.xlarge"
-   instance_name  = "my-notebook"
+   aws_region = "eu-west-1"
+   instance_type = "ml.t3.xlarge"
+   instance_name = "my-notebook"
    ```
 
 ### 3. Initialize and Validate
 
-```bash
+```hcl
 terraform init
 terraform validate
 terraform plan

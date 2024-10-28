@@ -1,97 +1,86 @@
 #!/bin/bash
-
 set -euo pipefail
 IFS=$'\n\t'
 
 # Configure logging
-exec 1> >(logger -s -t $(basename $0)) 2>&1
+exec 1> >(logger -s -t "$(basename "$0")") 2>&1
 
-# OVERVIEW:
-# This script runs once when the SageMaker notebook instance is created.
-# It installs necessary software and sets up initial configurations for autostop and code-server.
+echo "🚀 Starting instance creation setup..."
 
-echo "Running on-create script..."
-
-# Define a base directory
+# Define paths
 BASE_DIR="/home/ec2-user/SageMaker/my-sagemaker-setup"
+LIFECYCLE_DIR="/home/ec2-user/SageMaker/lifecycle_configurations"
+PASSWORD_LOG="/home/ec2-user/SageMaker/code-server-password.txt"
+PASSWORD_BACKUP="/home/ec2-user/SageMaker/.code-server-password.backup"
+CERT_DIR="/opt/ml/certificates"
+NGINX_CONF="/etc/nginx/nginx.conf"
 
-# Ensure the base directory exists and has the correct permissions
-# This is important because the SageMaker notebook instance is ephemeral
-# and the lifecycle configuration scripts run as the root user.
-
-# Create the base directory if it does not exist
-if [ ! -d "$BASE_DIR" ]; then
-	mkdir -p "$BASE_DIR"
-fi
-
-# Set the correct permissions for the base directory
-chmod 755 "$BASE_DIR"
-
-# Create necessary directories with proper permissions
-mkdir -p "$BASE_DIR/autostop" "$BASE_DIR/code-server"
-chmod 755 "$BASE_DIR" "$BASE_DIR/autostop" "$BASE_DIR/code-server"
-
-# Function to verify and set permissions
-verify_permissions() {
-	local file=$1
-	local perms=$2
-	if [ ! -f "$file" ]; then
-		echo "❌ Error: File not found: $file"
-		return 1
-	fi
-	if [ "$(stat -f "%Lp" "$file")" != "$perms" ]; then
-		echo "Setting permissions $perms on $file"
-		chmod "$perms" "$file" || return 1
-	fi
-	return 0
+# Function to create directories with proper permissions
+create_directory() {
+	local dir="$1"
+	echo "📁 Creating directory: $dir"
+	sudo mkdir -p "$dir"
+	sudo chown ec2-user:ec2-user "$dir"
+	sudo chmod 755 "$dir"
 }
 
-# Verify permissions of critical files
-critical_files=(
-	"$BASE_DIR/autostop/autostop.py:755"
-	"$BASE_DIR/code-server/on-create.sh:755"
-	"$BASE_DIR/code-server/on-start.sh:755"
-	"$BASE_DIR/healthcheck.sh:755"
-)
-
-for file_entry in "${critical_files[@]}"; do
-	IFS=':' read -r file perms <<<"$file_entry"
-	verify_permissions "$file" "$perms" || echo "⚠️ Warning: Permission check failed for $file"
+# Create required directories
+for dir in "$LIFECYCLE_DIR" "$BASE_DIR" "$BASE_DIR/autostop" "$BASE_DIR/code-server"; do
+	create_directory "$dir"
 done
 
-# Install dependencies and set up autostop
-echo "Setting up autostop functionality..."
-cd "$BASE_DIR/autostop"
+# Run code-server setup if the setup script exists
+echo "⚙️ Setting up code-server..."
+if [ -f "$BASE_DIR/code-server/on-create.sh" ]; then
+	bash "$BASE_DIR/code-server/on-create.sh"
+else
+	echo "⚠️ Warning: code-server setup script not found."
+fi
 
-# Install dependencies for autostop
-sudo yum install -y python3
-sudo python3 -m pip install --upgrade pip
-sudo pip3 install boto3 requests urllib3 pytz psutil
+# Initialize autostop configuration
+echo "🔧 Configuring autostop..."
+if [ -f "$BASE_DIR/autostop/autostop_config.env" ]; then
+	source "$BASE_DIR/autostop/autostop_config.env"
+else
+	echo "⚠️ Warning: autostop configuration not found."
+fi
 
-# Copy autostop.py to /usr/local/bin (we copy from the persistent SageMaker directory)
-sudo cp "$BASE_DIR/autostop/autostop.py" /usr/local/bin/autostop.py
-sudo chmod +x /usr/local/bin/autostop.py
+# Ensure code-server directories are properly set up
+create_directory "$BASE_DIR/autostop"
+create_directory "$BASE_DIR/code-server"
 
-echo "Autostop initial setup completed."
+# Install code-server
+echo "📦 Installing code-server..."
+if ! curl -fsSL https://code-server.dev/install.sh | sh; then
+	echo "❌ Error: Failed to install code-server."
+	exit 1
+fi
 
-# Install and configure code-server
-echo "Installing code-server..."
-curl -fsSL https://code-server.dev/install.sh | sh
+# Generate a secure random password using OpenSSL
+echo "🔐 Generating secure random password for code-server..."
+PASSWORD=$(openssl rand -base64 16)
 
-# Create code-server config
+# Store the password in log files for future use
+echo "📝 Saving code-server password..."
+echo "Generated code-server password" | tee "$PASSWORD_LOG"
+echo "$PASSWORD" >>"$PASSWORD_LOG"
+sudo chmod 600 "$PASSWORD_LOG"
+echo "$PASSWORD" | sudo tee "$PASSWORD_BACKUP" >/dev/null
+sudo chmod 600 "$PASSWORD_BACKUP"
+
+# Configure code-server
+echo "⚙️ Configuring code-server..."
 mkdir -p /home/ec2-user/.config/code-server
 cat <<EOF >/home/ec2-user/.config/code-server/config.yaml
 bind-addr: 127.0.0.1:8080
 auth: password
-password: your_secure_password  # Replace with a strong password
+password: $PASSWORD  # Dynamically generated password
 cert: false
 EOF
-
-# Set ownership
-chown -R ec2-user:ec2-user /home/ec2-user/.config
+sudo chown -R ec2-user:ec2-user /home/ec2-user/.config
 
 # Create systemd service for code-server
-echo "Setting up code-server service..."
+echo "🔧 Setting up systemd service for code-server..."
 cat <<EOF | sudo tee /etc/systemd/system/code-server.service
 [Unit]
 Description=code-server
@@ -109,22 +98,36 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
-# Install Nginx
-echo "Installing Nginx..."
-sudo amazon-linux-extras install nginx1 -y
+# Reload systemd configuration and start code-server service
+sudo systemctl daemon-reload
+sudo systemctl enable code-server
+sudo systemctl start code-server
 
-# Generate self-signed SSL certificates (for testing purposes)
-echo "Generating self-signed SSL certificates..."
-sudo mkdir -p /opt/ml/certificates
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-	-keyout /opt/ml/certificates/mykey.key \
-	-out /opt/ml/certificates/mycert.crt \
-	-subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=localhost"
-sudo chown -R nginx:nginx /opt/ml/certificates
+# Install and configure Nginx
+echo "🌐 Installing and configuring Nginx..."
+if ! sudo amazon-linux-extras install nginx1 -y; then
+	echo "❌ Error: Failed to install Nginx."
+	exit 1
+fi
 
-# Configure Nginx
-echo "Configuring Nginx..."
-cat <<EOF | sudo tee /etc/nginx/nginx.conf
+# Generate self-signed SSL certificates
+echo "🔒 Generating self-signed SSL certificates..."
+sudo mkdir -p "$CERT_DIR"
+if ! sudo openssl req -x509 -nodes -days 365 -newkey rsa:4096 \
+	-sha256 \
+	-keyout "$CERT_DIR/mykey.key" \
+	-out "$CERT_DIR/mycert.crt" \
+	-subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=$(hostname)" \
+	-addext "subjectAltName = DNS:$(hostname),DNS:localhost"; then
+	echo "❌ Error: Failed to generate SSL certificates."
+	exit 1
+fi
+sudo chmod 600 "$CERT_DIR/mykey.key"
+sudo chown -R nginx:nginx "$CERT_DIR"
+
+# Configure Nginx for reverse proxy to code-server
+echo "🔧 Configuring Nginx for reverse proxy to code-server..."
+cat <<EOF | sudo tee "$NGINX_CONF"
 user  nginx;
 worker_processes  auto;
 error_log  /var/log/nginx/error.log warn;
@@ -151,8 +154,8 @@ http {
         listen 0.0.0.0:443 ssl;
         server_name _;
 
-        ssl_certificate     /opt/ml/certificates/mycert.crt;
-        ssl_certificate_key /opt/ml/certificates/mykey.key;
+        ssl_certificate     $CERT_DIR/mycert.crt;
+        ssl_certificate_key $CERT_DIR/mykey.key;
 
         location / {
             proxy_pass http://127.0.0.1:8080/;
@@ -160,9 +163,50 @@ http {
             proxy_set_header Connection upgrade;
             proxy_set_header Accept-Encoding gzip;
             proxy_set_header Host \$host;
+
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 60s;
+            proxy_read_timeout 60s;
+        }
+
+        location /health {
+            access_log off;
+            return 200 'healthy\n';
         }
     }
 }
 EOF
 
-echo "on-create script completed."
+# Test Nginx configuration before restarting
+echo "🔄 Testing Nginx configuration..."
+if ! sudo nginx -t; then
+	echo "❌ Error: Nginx configuration test failed."
+	exit 1
+fi
+
+# Enable and start Nginx service
+echo "🚀 Enabling and starting Nginx service..."
+sudo systemctl enable nginx
+sudo systemctl start nginx
+
+echo "✅ Code-server setup completed. Password saved to $PASSWORD_LOG."
+
+# Additional system setup
+echo "🛠️ Running additional system setup..."
+sudo yum update -y
+sudo yum install -y git wget
+
+# Set up Python environment
+echo "🐍 Setting up Python environment..."
+if ! conda create -n python3 python=3.11 -y; then
+	echo "❌ Error: Failed to set up Python environment."
+	exit 1
+fi
+source activate python3
+
+# Install Python packages
+echo "📦 Installing Python packages..."
+pip install --upgrade pip
+pip install boto3 pandas numpy matplotlib seaborn scikit-learn jupyter
+
+echo "🎉 Setup complete."

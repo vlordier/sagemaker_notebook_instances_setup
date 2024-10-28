@@ -1,52 +1,58 @@
 #!/bin/bash
-
 set -euo pipefail
 IFS=$'\n\t'
 
 # Configure logging
 exec 1> >(logger -s -t "$(basename "$0")") 2>&1
 
-# OVERVIEW:
-# This script runs every time the SageMaker notebook instance starts.
-# It starts necessary services like code-server and Nginx, and logs the URL for VSCode access.
+echo "🚀 Starting code-server and Nginx services..."
 
-# Start code-server service
-echo "🚀 Starting code-server service..."
+# Reload systemd to account for new/updated services
+echo "🔄 Reloading systemd daemon..."
 if ! sudo systemctl daemon-reload; then
-	echo "Failed to reload systemd daemon"
+	echo "❌ Error: Failed to reload systemd daemon."
 	exit 1
 fi
 
-if ! sudo systemctl start code-server; then
-	echo "Failed to start code-server service"
+# Start code-server service with error handling
+echo "📦 Starting code-server service..."
+if sudo systemctl start code-server; then
+	echo "✅ code-server service started successfully."
+else
+	echo "❌ Error: Failed to start code-server service."
+	sudo journalctl -xeu code-server.service
 	exit 1
 fi
 
-# Start Nginx
-echo "🌐 Starting Nginx..."
-if ! sudo systemctl start nginx; then
-	echo "Failed to start Nginx"
+# Start Nginx service with error handling
+echo "🌐 Starting Nginx service..."
+if sudo systemctl start nginx; then
+	echo "✅ Nginx service started successfully."
+else
+	echo "❌ Error: Failed to start Nginx service."
+	sudo journalctl -xeu nginx.service
 	exit 1
 fi
 
-# Retrieve and log the password from the password file
+# Check and display code-server password
 PASSWORD_LOG="/home/ec2-user/SageMaker/code-server-password.txt"
 if [ -f "$PASSWORD_LOG" ]; then
 	PASSWORD=$(grep 'Generated code-server password' "$PASSWORD_LOG" | awk '{print $4}')
-	echo "🔑 Password for code-server: $PASSWORD"
+	if [ -n "$PASSWORD" ]; then
+		echo "🔑 Code-server password: $PASSWORD"
+	else
+		echo "⚠️ Warning: Unable to retrieve code-server password from $PASSWORD_LOG."
+	fi
 else
-	echo "Password log not found!"
+	echo "⚠️ Warning: Password log file not found at $PASSWORD_LOG."
 fi
 
-# Output VSCode URL to logs
-PUBLIC_DNS=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)
-CODE_SERVER_URL="https://${PUBLIC_DNS}"
-echo "VSCode is running at: ${CODE_SERVER_URL}" | sudo tee -a /var/log/jupyter.log
-
-# Start health monitoring
-echo "🏥 Starting health monitoring..."
-if ! /home/ec2-user/SageMaker/my-sagemaker-setup/healthcheck.sh >/var/log/healthcheck.log 2>&1; then
-	echo "Warning: Health check failed on startup"
+# Fetch and display the public DNS for code-server access
+PUBLIC_DNS=$(curl -s http://169.254.169.254/latest/meta-data/public-hostname || echo "UNKNOWN")
+if [ "$PUBLIC_DNS" != "UNKNOWN" ]; then
+	echo "🌍 Code-server URL: https://${PUBLIC_DNS}"
+else
+	echo "⚠️ Warning: Unable to retrieve public DNS hostname."
 fi
 
-echo "Code-server is ready for use."
+echo "✅ All services started successfully."

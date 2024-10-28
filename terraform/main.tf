@@ -9,23 +9,20 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region  = var.aws_region
+  profile = var.aws_profile
 }
 
-# Verify VPC exists
-data "aws_vpc" "selected" {
-  id = var.vpc_id
-}
 
 # Verify subnet exists and belongs to the VPC
-data "aws_subnet" "selected" {
-  id = var.subnet_id
+# data "aws_subnet" "selected" {
+#   id = var.subnet_id
 
-  filter {
-    name   = "vpc-id"
-    values = [var.vpc_id]
-  }
-}
+#   filter {
+#     name   = "vpc-id"
+#     values = [var.vpc_id]
+#   }
+# }
 
 # Security Group
 resource "aws_security_group" "notebook" {
@@ -38,33 +35,33 @@ resource "aws_security_group" "notebook" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ips
+    cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS for code-server"
   }
 
-  # SSH access (optional, for troubleshooting)
+  # SSH access
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ips
+    cidr_blocks = ["0.0.0.0/0"]
     description = "SSH access"
   }
 
-  # Allow all outbound traffic
+  # Restrict outbound traffic to necessary services
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound traffic"
+    description = "HTTPS outbound to internet"
   }
 
   tags = {
     Name         = "notebook-sg"
     Environment  = terraform.workspace
     ManagedBy    = "terraform"
-    VPC          = data.aws_vpc.selected.id
+    VPC          = var.vpc_id
     CreatedBy    = "terraform"
     CreatedDate  = timestamp()
     Project      = "notebook"
@@ -73,9 +70,11 @@ resource "aws_security_group" "notebook" {
 
   lifecycle {
     create_before_destroy = true
-    prevent_destroy       = true
+    prevent_destroy       = true # Keep SG protected
   }
 }
+
+
 
 # SageMaker Notebook Instance
 resource "aws_sagemaker_notebook_instance" "notebook" {
@@ -94,8 +93,7 @@ resource "aws_sagemaker_notebook_instance" "notebook" {
   }
 
   lifecycle {
-    create_before_destroy = true
-    prevent_destroy       = true
+    prevent_destroy = false
     ignore_changes = [
       tags,
       tags_all,
@@ -109,43 +107,27 @@ resource "aws_sagemaker_notebook_instance_lifecycle_configuration" "notebook" {
   name = "${var.instance_name}-lifecycle-config"
 
   on_create = base64encode(<<-EOF
-    #!/bin/bash
-    set -e
+#!/bin/bash
+set -ex
 
-    # Configure logging with streaming to CloudWatch
-    exec 1> >(tee >(logger -s -t $(basename $0))) 2>&1
+# Basic setup only
+echo "Starting basic setup..."
+sudo yum update -y
+sudo yum install -y git wget
 
-    # Create base directory
-    BASE_DIR="/home/ec2-user/SageMaker/my-sagemaker-setup"
-    mkdir -p "$BASE_DIR/lifecycle_configurations"
-
-    # Copy the lifecycle scripts content directly
-    cat > "$BASE_DIR/lifecycle_configurations/on-create.sh" <<'SCRIPT'
-$(cat lifecycle_configurations/on-create.sh)
-SCRIPT
-
-    cat > "$BASE_DIR/lifecycle_configurations/on-start.sh" <<'SCRIPT'
-$(cat lifecycle_configurations/on-start.sh)
-SCRIPT
-
-    # Make scripts executable
-    chmod +x "$BASE_DIR"/lifecycle_configurations/*.sh
-
-    # Run the on-create script
-    /bin/bash "$BASE_DIR/lifecycle_configurations/on-create.sh"
-  EOF
+echo "Setup complete"
+EOF
   )
 
   on_start = base64encode(<<-EOF
-    #!/bin/bash
-    set -e
+#!/bin/bash
+set -ex
 
-    # Configure logging
-    exec 1> >(logger -s -t $(basename $0)) 2>&1
+echo "Starting instance..."
+date > /home/ec2-user/startup.log
 
-    # Run the on-start script
-    /bin/bash /home/ec2-user/SageMaker/my-sagemaker-setup/lifecycle_configurations/on-start.sh
-  EOF
+echo "Startup complete"
+EOF
   )
 }
 

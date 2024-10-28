@@ -1,4 +1,5 @@
 #!/bin/bash
+#!/bin/bash
 
 # Exit on error, undefined vars, and pipe failures
 set -euo pipefail
