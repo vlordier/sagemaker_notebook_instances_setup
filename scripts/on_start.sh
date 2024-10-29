@@ -53,9 +53,34 @@ nohup code-server --bind-addr 127.0.0.1:8080 --user-data-dir "${PERSISTENT_DIR}/
 CODE_SERVER_PID=$!
 echo "code-server started with PID $CODE_SERVER_PID" | tee -a "$LOG_FILE"
 
+# Get instance information from metadata service
+REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+NOTEBOOK_NAME=$(curl -s http://169.254.169.254/latest/meta-data/tags/instance/sagemaker:notebook-name)
+
 # Print access information
 echo "Access code-server via Jupyter at: /proxy/8080/" | tee -a "$LOG_FILE"
-echo "Full URL will be: https://<notebook-name>.notebook.<region>.sagemaker.aws/proxy/8080/" | tee -a "$LOG_FILE"
+FULL_URL="https://${NOTEBOOK_NAME}.notebook.${REGION}.sagemaker.aws/proxy/8080/"
+echo "Full URL: ${FULL_URL}" | tee -a "$LOG_FILE"
+
+# Test URL accessibility
+echo "Testing URL accessibility..." | tee -a "$LOG_FILE"
+MAX_RETRIES=12  # Try for 2 minutes (12 * 10 seconds)
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if curl -s -o /dev/null -w "%{http_code}" "${FULL_URL}" | grep -q "200\|302"; then
+        echo "✓ URL is accessible!" | tee -a "$LOG_FILE"
+        break
+    else
+        echo "Waiting for URL to become accessible (attempt $((RETRY_COUNT + 1))/${MAX_RETRIES})..." | tee -a "$LOG_FILE"
+        sleep 10
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+    fi
+done
+
+if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+    echo "⚠️  Warning: URL could not be verified after ${MAX_RETRIES} attempts" | tee -a "$LOG_FILE"
+    echo "Please check the URL manually and ensure all services are running correctly" | tee -a "$LOG_FILE"
+fi
 
 # Get environment variables with defaults
 IDLE_TIMEOUT="${IDLE_TIMEOUT:-5400}" # Default: 1.5 hours in seconds
