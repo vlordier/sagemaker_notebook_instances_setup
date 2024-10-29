@@ -34,14 +34,13 @@ variable "volume_size" {
   type        = number
 }
 
-variable "sagemaker_role_name" {
-  description = "Name of the IAM role for SageMaker"
+variable "sagemaker_role_arn" {
+  description = "ARN of the existing IAM role for SageMaker"
   type        = string
-  default     = "AWSServiceRoleForAmazonSageMaker"
 }
 
 variable "allowed_cidr_blocks" {
-  description = "CIDR blocks allowed to connect to Neo4j ports"
+  description = "CIDR blocks allowed to access the notebook instance"
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Warning: restrict this in production
+  default     = ["10.0.0.0/8"]
 }
