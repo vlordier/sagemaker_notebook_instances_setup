@@ -9,3 +9,4 @@
 *.tfstate.backup
 *.tfstate.backup.*
 *.tfstate.lock.info
+*.log
