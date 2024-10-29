@@ -28,32 +28,20 @@ variable "instance_type" {
   type        = string
 }
 
-variable "idle_timeout" {
-  description = "Idle timeout in seconds"
+
+variable "volume_size" {
+  description = "Volume size in GB for the SageMaker instance"
   type        = number
 }
 
-variable "start_hour" {
-  description = "Hour to start the instance (24h format)"
-  type        = number
-}
-
-variable "start_minute" {
-  description = "Minute to start the instance"
-  type        = number
-}
-
-variable "end_hour" {
-  description = "Hour to stop the instance (24h format)"
-  type        = number
-}
-
-variable "end_minute" {
-  description = "Minute to stop the instance"
-  type        = number
-}
-
-variable "timezone" {
-  description = "Timezone for scheduling"
+variable "sagemaker_role_name" {
+  description = "Name of the IAM role for SageMaker"
   type        = string
+  default     = "AWSServiceRoleForAmazonSageMaker"
+}
+
+variable "allowed_cidr_blocks" {
+  description = "CIDR blocks allowed to connect to Neo4j ports"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]  # Warning: restrict this in production
 }
