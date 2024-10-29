@@ -163,12 +163,12 @@ main() {
 	load_config
 
 	# Get and set AWS profile
-	AWS_PROFILE=$(confirm_input "Enter AWS profile" "${AWS_PROFILE:-default}")
+	AWS_PROFILE=$(confirm_input "Enter AWS profile" "${AWS_PROFILE:-saml}")
 	export AWS_PROFILE
 
 	# Validate and set AWS region
 	while true; do
-		AWS_REGION=$(confirm_input "Enter AWS region" "${AWS_REGION:-us-west-2}")
+		AWS_REGION=$(confirm_input "Enter AWS region" "${AWS_REGION:-eu-west-1}")
 		# Remove any extra spaces and normalize format
 		AWS_REGION=$(echo "$AWS_REGION" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 		if [[ $AWS_REGION =~ ^[a-z]{2}-[a-z]{4,6}-[0-9]$ ]]; then
