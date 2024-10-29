@@ -9,7 +9,7 @@ fi
 
 # Get and display numbered list of instances
 echo "Available SageMaker notebook instances:"
-INSTANCES=($(aws sagemaker list-notebook-instances --profile saml --query "NotebookInstances[*].NotebookInstanceName" --output text))
+readarray -t INSTANCES < <(aws sagemaker list-notebook-instances --profile saml --query "NotebookInstances[*].NotebookInstanceName" --output text)
 
 if [ ${#INSTANCES[@]} -eq 0 ]; then
 	echo "No instances found."
@@ -22,7 +22,7 @@ done
 
 # Prompt user to select instance by number
 echo -n "Enter the number of the instance (1-${#INSTANCES[@]}): "
-read SELECTION
+read -r SELECTION
 
 if ! [[ $SELECTION =~ ^[0-9]+$ ]] || [ "$SELECTION" -lt 1 ] || [ "$SELECTION" -gt ${#INSTANCES[@]} ]; then
 	echo "Invalid selection. Please enter a number between 1 and ${#INSTANCES[@]}"

@@ -47,19 +47,52 @@ find /home/ec2-user/SageMaker -type d -name ".vscode" 2>/dev/null | while read -
 	setup_devcontainer "$vscode_dir"
 done
 
+# Install nginx if not present
+if ! command -v nginx &>/dev/null; then
+	echo "Installing nginx..." | tee -a "$LOG_FILE"
+	sudo yum install -y nginx | sudo tee -a "$LOG_FILE" || {
+		echo "Failed to install nginx" | tee -a "$LOG_FILE"
+		exit 1
+	}
+fi
+
+# Configure nginx for code-server
+echo "Configuring nginx..." | tee -a "$LOG_FILE"
+sudo tee /etc/nginx/conf.d/code-server.conf >/dev/null <<EOL
+server {
+    listen 8080;
+    server_name _;
+
+    location /vscode/ {
+        proxy_pass http://localhost:8081/;
+        proxy_set_header Host \$host;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection upgrade;
+        proxy_set_header Accept-Encoding gzip;
+    }
+}
+EOL
+
 # Start code-server from persistent location
 export PATH="${PERSISTENT_DIR}/bin:$PATH"
-nohup code-server --bind-addr 0.0.0.0:8080 --auth none --user-data-dir "${PERSISTENT_DIR}/data" >/var/log/code-server.log 2>&1 &
+nohup code-server --bind-addr 127.0.0.1:8081 --auth none --user-data-dir "${PERSISTENT_DIR}/data" >/var/log/code-server.log 2>&1 &
 CODE_SERVER_PID=$!
 echo "code-server started with PID $CODE_SERVER_PID" | tee -a "$LOG_FILE"
+
+# Start nginx
+echo "Starting nginx..." | tee -a "$LOG_FILE"
+sudo systemctl start nginx || {
+	echo "Failed to start nginx" | tee -a "$LOG_FILE"
+	exit 1
+}
 
 # Get instance information from metadata service
 REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
 NOTEBOOK_NAME=$(curl -s http://169.254.169.254/latest/meta-data/tags/instance/sagemaker:notebook-name)
 
 # Print access information
-echo "Access VS Code directly at port 8080" | tee -a "$LOG_FILE"
-FULL_URL="https://${NOTEBOOK_NAME}.notebook.${REGION}.sagemaker.aws:8080/"
+echo "Access VS Code at /vscode path" | tee -a "$LOG_FILE"
+FULL_URL="https://${NOTEBOOK_NAME}.notebook.${REGION}.sagemaker.aws:8080/vscode/"
 echo "Full URL: ${FULL_URL}" | tee -a "$LOG_FILE"
 
 # Test URL accessibility

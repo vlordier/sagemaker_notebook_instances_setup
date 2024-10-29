@@ -4,5 +4,5 @@ aws_profile        = "saml"
 aws_region         = "eu-west-1"
 instance_type      = "ml.t3.large"
 volume_size        = 20
-instance_name      = "sm-nb-vincent-test"
+instance_name      = "sagemaker-instance"
 sagemaker_role_arn = "arn:aws:iam::665025865725:role/App_SageMakerRole"

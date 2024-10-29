@@ -15,15 +15,25 @@ error_exit() {
 
 trap 'error_exit $LINENO' ERR
 
-# Ensure curl is available
-if ! command -v curl &>/dev/null; then
-	echo "curl could not be found. Installing curl..." | tee -a "$LOG_FILE"
-	sudo yum install -y curl >>"$LOG_FILE" 2>&1 || {
-		echo "Failed to install curl" | tee -a "$LOG_FILE"
-		exit 1
+# Install required packages
+for pkg in curl nginx; do
+	if ! command -v $pkg &>/dev/null; then
+		echo "$pkg could not be found. Installing $pkg..." | tee -a "$LOG_FILE"
+		sudo yum install -y "$pkg" | sudo tee -a "$LOG_FILE" || {
+			echo "Failed to install $pkg" | tee -a "$LOG_FILE"
+			exit 1
+		}
+	else
+		echo "$pkg is already installed." | tee -a "$LOG_FILE"
+	fi
+done
+
+# Configure SELinux to allow nginx to proxy
+if command -v setsebool &>/dev/null; then
+	echo "Configuring SELinux for nginx..." | tee -a "$LOG_FILE"
+	sudo setsebool -P httpd_can_network_connect 1 || {
+		echo "Warning: Failed to configure SELinux" | tee -a "$LOG_FILE"
 	}
-else
-	echo "curl is already installed." | tee -a "$LOG_FILE"
 fi
 
 # Create persistent directories

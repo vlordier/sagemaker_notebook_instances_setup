@@ -4,7 +4,7 @@ set -euo pipefail
 # Script Constants
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="${SCRIPT_DIR}/setup_sagemaker.log"
-CONFIG_FILE="${SCRIPT_DIR}/defaults.env"
+CONFIG_FILE="${SCRIPT_DIR}/config/defaults.env"
 TERRAFORM_DIR="${SCRIPT_DIR}/terraform"
 VALID_INSTANCE_TYPES=("ml.t2.medium" "ml.t2.large" "ml.t3.medium" "ml.t3.large" "ml.m5.large")
 
@@ -30,8 +30,9 @@ load_config() {
 confirm_input() {
 	local prompt="$1"
 	local default_value="$2"
-	read -r -p "$prompt [$default_value]: " input
-	echo "${input:-$default_value}"
+	local current_value="${!2:-$default_value}"
+	read -r -p "$prompt [$current_value]: " input
+	echo "${input:-$current_value}"
 }
 
 # Validate commands
@@ -56,7 +57,7 @@ fetch_vpc_and_subnet() {
 	log "Fetching available VPCs..."
 
 	# Get list of VPCs with their names and CIDR blocks
-	vpc_list=$(aws ec2 describe-vpcs --query 'Vpcs[].[VpcId,CidrBlock,Tags[?Key==`Name`].Value|[0]]' --output text)
+	vpc_list=$(aws ec2 describe-vpcs --query "Vpcs[].[VpcId,CidrBlock,Tags[?Key=='Name'].Value|[0]]" --output text)
 
 	if [ -z "$vpc_list" ]; then
 		error "No VPCs found in region $AWS_REGION"
@@ -80,7 +81,7 @@ fetch_vpc_and_subnet() {
 	# Get available subnets for the selected VPC
 	subnet_list=$(aws ec2 describe-subnets \
 		--filters "Name=vpc-id,Values=$VPC_ID" \
-		--query 'Subnets[].[SubnetId,CidrBlock,Tags[?Key==`Name`].Value|[0]]' \
+		--query "Subnets[].[SubnetId,CidrBlock,Tags[?Key=='Name'].Value|[0]]" \
 		--output text)
 
 	if [ -z "$subnet_list" ]; then
@@ -108,7 +109,7 @@ get_sagemaker_role() {
 	log "Fetching available IAM roles..."
 
 	# Get list of roles that have SageMaker policies attached
-	role_list=$(aws iam list-roles --query 'Roles[?contains(AssumeRolePolicyDocument.Statement[].Principal.Service, `sagemaker.amazonaws.com`)].[RoleName,Arn]' --output text)
+	role_list=$(aws iam list-roles --query "Roles[?contains(AssumeRolePolicyDocument.Statement[].Principal.Service, 'sagemaker.amazonaws.com')].[RoleName,Arn]" --output text)
 
 	if [ -z "$role_list" ]; then
 		error "No suitable SageMaker roles found. Please create a role with SageMaker trust relationship first."
@@ -163,12 +164,12 @@ main() {
 	load_config
 
 	# Get and set AWS profile
-	AWS_PROFILE=$(confirm_input "Enter AWS profile" "${AWS_PROFILE:-saml}")
+	AWS_PROFILE=$(confirm_input "Enter AWS profile" AWS_PROFILE)
 	export AWS_PROFILE
 
 	# Validate and set AWS region
 	while true; do
-		AWS_REGION=$(confirm_input "Enter AWS region" "${AWS_REGION:-eu-west-1}")
+		AWS_REGION=$(confirm_input "Enter AWS region" AWS_REGION)
 		# Remove any extra spaces and normalize format
 		AWS_REGION=$(echo "$AWS_REGION" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 		if [[ $AWS_REGION =~ ^[a-z]{2}-[a-z]{4,6}-[0-9]$ ]]; then
@@ -179,7 +180,7 @@ main() {
 		fi
 		log "Invalid region format or region does not exist. Please use format like 'us-west-2' or 'eu-west-1'"
 	done
-	INSTANCE_TYPE=$(confirm_input "Enter instance type" "${INSTANCE_TYPE:-ml.t3.large}")
+	INSTANCE_TYPE=$(confirm_input "Enter instance type" INSTANCE_TYPE)
 	validate_instance_type "$INSTANCE_TYPE"
 	VOLUME_SIZE=$(confirm_input "Enter volume size in GB" "${VOLUME_SIZE:-20}")
 	INSTANCE_NAME=$(confirm_input "Enter instance name" "${INSTANCE_NAME:-sagemaker-instance}")

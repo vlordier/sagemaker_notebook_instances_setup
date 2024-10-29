@@ -1,12 +1,33 @@
+terraform {
+  required_version = ">= 1.0.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+  }
+}
+
 provider "aws" {
   profile = var.aws_profile
   region  = var.aws_region
 }
 
+# Add random provider for unique naming
+provider "random" {}
+
+resource "random_id" "suffix" {
+  byte_length = 4
+}
 
 
 resource "aws_security_group" "sagemaker_sg" {
-  name        = "${var.instance_name}-sg"
+  name        = "${var.instance_name}-sg-${random_id.suffix.hex}"
   description = "Security group for SageMaker notebook instance"
   vpc_id      = var.vpc_id
 
@@ -60,7 +81,7 @@ resource "aws_security_group" "sagemaker_sg" {
   }
 
   tags = {
-    Name = "${var.instance_name}-sg"
+    Name = "${var.instance_name}-sg-${random_id.suffix.hex}"
   }
 }
 
