@@ -31,12 +31,6 @@ PERSISTENT_DIR="/home/ec2-user/SageMaker/.local/code-server"
 JUPYTER_DIR="/home/ec2-user/.jupyter"
 mkdir -p "${JUPYTER_DIR}"
 
-# Install required pip packages
-echo "Installing Jupyter server proxy..." | tee -a "$LOG_FILE"
-pip install jupyter-server-proxy jupyterlab-codserver >>"$LOG_FILE" 2>&1 || {
-	echo "Failed to install Jupyter packages" | tee -a "$LOG_FILE"
-	exit 1
-}
 echo "Creating persistent directory at ${PERSISTENT_DIR}..." | tee -a "$LOG_FILE"
 mkdir -p "${PERSISTENT_DIR}"
 
