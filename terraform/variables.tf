@@ -1,78 +1,59 @@
+variable "aws_profile" {
+  description = "AWS profile to use"
+  type        = string
+}
+
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "eu-west-1"
 }
-
-variable "instance_type" {
-  description = "Instance type for the SageMaker notebook"
-  type        = string
-}
-
-variable "sagemaker_role_arn" {
-  description = "ARN of the SageMaker execution role"
-  type        = string
-}
-
-variable "subnet_id" {
-  description = "Subnet ID for the SageMaker notebook"
-  type        = string
-}
-
-
 
 variable "vpc_id" {
   description = "VPC ID"
   type        = string
 }
 
+variable "subnet_id" {
+  description = "Subnet ID"
+  type        = string
+}
+
 variable "instance_name" {
-  description = "Instance name for resources"
+  description = "Name of the SageMaker instance"
   type        = string
 }
 
-variable "aws_profile" {
-  description = "AWS profile name"
+variable "instance_type" {
+  description = "Instance type for SageMaker"
   type        = string
-}
-
-variable "allowed_ips" {
-  description = "List of allowed IP addresses in CIDR notation"
-  type        = list(string)
-  default     = ["0.0.0.0/0"] # WARNING: Change this to your specific IPs in production
 }
 
 variable "idle_timeout" {
-  description = "Idle time threshold in seconds"
+  description = "Idle timeout in seconds"
   type        = number
 }
 
 variable "start_hour" {
-  description = "Start hour for active hours (24h format)"
+  description = "Hour to start the instance (24h format)"
   type        = number
 }
 
 variable "start_minute" {
-  description = "Start minute for active hours"
+  description = "Minute to start the instance"
   type        = number
 }
 
 variable "end_hour" {
-  description = "End hour for active hours (24h format)"
+  description = "Hour to stop the instance (24h format)"
   type        = number
 }
 
 variable "end_minute" {
-  description = "End minute for active hours"
+  description = "Minute to stop the instance"
   type        = number
 }
 
 variable "timezone" {
-  description = "Timezone for the active hours"
+  description = "Timezone for scheduling"
   type        = string
-}
-
-variable "cpu_threshold" {
-  description = "CPU usage threshold percentage"
-  type        = number
 }
